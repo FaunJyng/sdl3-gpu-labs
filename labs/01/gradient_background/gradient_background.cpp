@@ -17,7 +17,8 @@ namespace {
 		return true;
 	}
 
-	SDL_GPUShader *LoadShader(SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage) {
+	auto LoadShader(SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage)
+		-> SDL_GPUShader * {
 		size_t codeSize{0};
 		void *code{SDL_LoadFile(path, &codeSize)};
 		if (!code) {
@@ -49,8 +50,8 @@ namespace {
 		return shader;
 	}
 
-	SDL_GPUGraphicsPipeline *CreateGradientGraphicsPipeline(SDL_GPUDevice *device,
-															SDL_Window *window) {
+	auto CreateGradientGraphicsPipeline(SDL_GPUDevice *device, SDL_Window *window)
+		-> SDL_GPUGraphicsPipeline * {
 		std::string gradVertPath, gradFragPath;
 		if (!GetAbsolutePathRelativeToExe(&gradVertPath,
 										  "01",
@@ -184,7 +185,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 }
 
 SDL_AppResult SDL_AppIterate(void *appstate) {
-	auto *state = static_cast<AppState *>(appstate);
+	auto *state{static_cast<AppState *>(appstate)};
 
 	SDL_GPUCommandBuffer *cmd_buf{SDL_AcquireGPUCommandBuffer(state->gpuDevice.get())};
 	if (!cmd_buf) {
