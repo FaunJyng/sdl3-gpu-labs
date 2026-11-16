@@ -1,3 +1,11 @@
+/**
+ * @file gradient_background.cpp
+ * @author FaunJyng
+ * @brief Create a background with a smoothly changing RGB color gradient.
+ * @version 1.0
+ * @date 15/11/2026
+ */
+
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
