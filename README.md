@@ -17,7 +17,7 @@ A description and status of each lab is provided below.
 | `📁 01` | 4 | Triangle Color | Assign different colors to each vertex and observe color interpolation. | 🟢 |
 | `📁 01` | 5 | Gradient Background | Create a background with a smoothly changing RGB color gradient. | 🟢 |
 | `📁 01` | 6 | Triangle Position | Modify the coordinates of the three vertices to move the triangle. | 🔴 |
-| `📁 01` | 7 | Renders a triangle with red, green, and blue vertices that smoothly interpolates colors across its surface while rotating continuously in a circle. | 🔴 |
+| `📁 01` | 7 | Animated RGB Triangle | Renders a triangle with red, green, and blue vertices that smoothly interpolates colors across its surface while rotating continuously in a circle. | 🔴 |
 | `📁 01` | 8 | Multiple Triangles | Render multiple triangles within a single frame. | 🔴 |
 | `📁 01` | 9 | Triangle Rotation | Rotate a triangle using coordinate transformations in HLSL. | 🔴 |
 | `📁 01` | 10 | Animated Triangle | Animate a triangle by making it move, rotate, and change color over time. | 🔴 |
