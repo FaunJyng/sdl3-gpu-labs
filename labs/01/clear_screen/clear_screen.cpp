@@ -88,7 +88,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 											   &width,
 											   &height)) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-					 "Accquire swapchain texture: %s",
+					 "Accquire swapchain texture failed: %s",
 					 SDL_GetError());
 		SDL_CancelGPUCommandBuffer(cmd_buf);
 		return SDL_APP_FAILURE;
@@ -106,7 +106,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
 	if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-					 "SDL_SubmitGPUCommandBuffer: %s",
+					 "SDL_SubmitGPUCommandBuffer() failed: %s",
 					 SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
