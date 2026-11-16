@@ -9,11 +9,11 @@ All labs are located in the `📁 labs` directory and organized into numbered su
 
 A description and status of each lab is provided below.
 
-| Folder | No. | Name | Requirements | Status |
+| Source Folder | No. | Name | Requirements | Status |
 |:------:|:---:|:---|:---|:---:|
 | `📁 01` | 1 | Clear Screen | Clear the entire screen to a single color. | 🟢 |
-| `📁 01` | 2 | Gradient Background | Create a background with a smoothly changing RGB color gradient. | 🟢 |
-| `📁 01` | 3 | Animated Background | Continuously change the background color over time. | 🔴 |
+| `📁 01` | 2 | Animated Background | Continuously change the background color over time. | 🟢 |
+| `📁 01` | 3 | Gradient Background | Create a background with a smoothly changing RGB color gradient. | 🟢 |
 | `📁 01` | 4 | First Triangle | Render a triangle using a Vertex Shader and a Fragment Shader. | 🔴 |
 | `📁 01` | 5 | Triangle Position | Modify the coordinates of the three vertices to move the triangle. | 🔴 |
 | `📁 01` | 6 | Triangle Color | Assign different colors to each vertex and observe color interpolation. | 🔴 |

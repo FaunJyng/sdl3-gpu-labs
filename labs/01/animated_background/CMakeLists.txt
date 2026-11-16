@@ -1,0 +1,2 @@
+add_executable(animated_background animated_background.cpp)
+target_link_libraries(animated_background PRIVATE SDL3::SDL3)

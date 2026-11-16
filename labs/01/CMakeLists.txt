@@ -1,2 +1,3 @@
 add_subdirectory(clear_screen)
 add_subdirectory(gradient_background)
+add_subdirectory(animated_background)
