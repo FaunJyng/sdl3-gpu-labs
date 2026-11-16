@@ -14,10 +14,10 @@ A description and status of each lab is provided below.
 | `📁 01` | 1 | Clear Screen | Clear the entire screen to a single color. | 🟢 |
 | `📁 01` | 2 | Animated Background | Continuously change the background color over time. | 🟢 |
 | `📁 01` | 3 | First Triangle | Render a triangle using a Vertex Shader and a Fragment Shader. | 🟢 |
-| `📁 01` | 4 | Gradient Background | Create a background with a smoothly changing RGB color gradient. | 🟢 |
-| `📁 01` | 5 | Triangle Position | Modify the coordinates of the three vertices to move the triangle. | 🔴 |
-| `📁 01` | 6 | Triangle Color | Assign different colors to each vertex and observe color interpolation. | 🔴 |
-| `📁 01` | 7 | RGB Triangle | Create a triangle whose three vertices are colored red, green, and blue, respectively. | 🔴 |
+| `📁 01` | 4 | Triangle Color | Assign different colors to each vertex and observe color interpolation. | 🟢 |
+| `📁 01` | 5 | Gradient Background | Create a background with a smoothly changing RGB color gradient. | 🟢 |
+| `📁 01` | 6 | Triangle Position | Modify the coordinates of the three vertices to move the triangle. | 🔴 |
+| `📁 01` | 7 | Renders a triangle with red, green, and blue vertices that smoothly interpolates colors across its surface while rotating continuously in a circle. | 🔴 |
 | `📁 01` | 8 | Multiple Triangles | Render multiple triangles within a single frame. | 🔴 |
 | `📁 01` | 9 | Triangle Rotation | Rotate a triangle using coordinate transformations in HLSL. | 🔴 |
 | `📁 01` | 10 | Animated Triangle | Animate a triangle by making it move, rotate, and change color over time. | 🔴 |

@@ -1,4 +1,5 @@
 add_subdirectory(clear_screen)
 add_subdirectory(animated_background)
 add_subdirectory(first_triangle)
+add_subdirectory(triangle_color)
 add_subdirectory(gradient_background)
