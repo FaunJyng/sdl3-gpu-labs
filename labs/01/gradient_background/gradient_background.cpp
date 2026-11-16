@@ -17,18 +17,18 @@ namespace {
 	namespace fs = std::filesystem;
 	template <typename... Args>
 	auto GetAbsolutePathRelativeToExe(std::string *output, Args &&...paths) -> bool {
-		const char *basePath{SDL_GetBasePath()};
-		if (basePath == nullptr) return false;
-		fs::path fullPath{fs::path(basePath)};
-		((fullPath /= std::forward<Args>(paths)), ...);
-		*output = fullPath.string();
+		const char *base_path{SDL_GetBasePath()};
+		if (base_path == nullptr) return false;
+		fs::path full_path{fs::path(base_path)};
+		((full_path /= std::forward<Args>(paths)), ...);
+		*output = full_path.string();
 		return true;
 	}
 
 	auto LoadShader(SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage)
 		-> SDL_GPUShader * {
-		size_t codeSize{0};
-		void *code{SDL_LoadFile(path, &codeSize)};
+		size_t code_size{0};
+		void *code{SDL_LoadFile(path, &code_size)};
 		if (!code) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
 						 "SDL_LoadFile() failed (%s): %s",
@@ -38,7 +38,7 @@ namespace {
 		}
 
 		SDL_GPUShaderCreateInfo info{};
-		info.code_size = codeSize;
+		info.code_size = code_size;
 		info.code = static_cast<const Uint8 *>(code);
 		info.entrypoint = "main";
 		info.format = SDL_GPU_SHADERFORMAT_SPIRV;
@@ -46,7 +46,7 @@ namespace {
 
 		SDL_GPUShader *shader{SDL_CreateGPUShader(device, &info)};
 
-		SDL_free(code);	 // !!!!!!!!!!!!!!!!!!!!!!!!!!!
+		SDL_free(code);
 
 		if (!shader) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -60,13 +60,13 @@ namespace {
 
 	auto CreateGradientGraphicsPipeline(SDL_GPUDevice *device, SDL_Window *window)
 		-> SDL_GPUGraphicsPipeline * {
-		std::string gradVertPath, gradFragPath;
-		if (!GetAbsolutePathRelativeToExe(&gradVertPath,
+		std::string grad_vert_path, grad_frag_path;
+		if (!GetAbsolutePathRelativeToExe(&grad_vert_path,
 										  "01",
 										  "gradient_background",
 										  "shaders",
 										  "gradient.vert.spv") ||
-			!GetAbsolutePathRelativeToExe(&gradFragPath,
+			!GetAbsolutePathRelativeToExe(&grad_frag_path,
 										  "01",
 										  "gradient_background",
 										  "shaders",
@@ -75,11 +75,11 @@ namespace {
 		}
 
 		SDL_GPUShader *vertex_shader{
-			LoadShader(device, gradVertPath.data(), SDL_GPU_SHADERSTAGE_VERTEX)};
+			LoadShader(device, grad_vert_path.data(), SDL_GPU_SHADERSTAGE_VERTEX)};
 		if (!vertex_shader) return nullptr;
 
 		SDL_GPUShader *fragment_shader{
-			LoadShader(device, gradFragPath.data(), SDL_GPU_SHADERSTAGE_FRAGMENT)};
+			LoadShader(device, grad_frag_path.data(), SDL_GPU_SHADERSTAGE_FRAGMENT)};
 		if (!fragment_shader) {
 			SDL_ReleaseGPUShader(device, vertex_shader);
 			return nullptr;
@@ -134,17 +134,17 @@ namespace {
 
 	struct AppState {
 		std::unique_ptr<SDL_Window, SDLWindowDestroyer> window;
-		std::unique_ptr<SDL_GPUDevice, SDLGPUDeviceDestroyer> gpuDevice;
+		std::unique_ptr<SDL_GPUDevice, SDLGPUDeviceDestroyer> gpu_device;
 		// Pipeline must be released before GPU device
 		SDL_GPUGraphicsPipeline *pipeline{nullptr};
-		bool windowClaimed{false};
+		bool window_claimed{false};
 
 		~AppState() {
-			if (pipeline && gpuDevice) {
-				SDL_ReleaseGPUGraphicsPipeline(gpuDevice.get(), pipeline);
+			if (pipeline && gpu_device) {
+				SDL_ReleaseGPUGraphicsPipeline(gpu_device.get(), pipeline);
 			}
-			if (windowClaimed && gpuDevice && window) {
-				SDL_ReleaseWindowFromGPUDevice(gpuDevice.get(), window.get());
+			if (window_claimed && gpu_device && window) {
+				SDL_ReleaseWindowFromGPUDevice(gpu_device.get(), window.get());
 			}
 		}
 	};
@@ -167,26 +167,26 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 		return SDL_APP_FAILURE;
 	}
 
-	state->gpuDevice.reset(SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr));
-	if (!state->gpuDevice) {
+	state->gpu_device.reset(SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr));
+	if (!state->gpu_device) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
 					 "SDL_CreateGPUDevice() failed: %s",
 					 SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
-	if (!SDL_ClaimWindowForGPUDevice(state->gpuDevice.get(), state->window.get())) {
+	if (!SDL_ClaimWindowForGPUDevice(state->gpu_device.get(), state->window.get())) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
 					 "SDL_ClaimWindowForGPUDevice() failed: %s",
 					 SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
-	state->windowClaimed = true;
+	state->window_claimed = true;
 
 	SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
 				"GPU backend: %s",
-				SDL_GetGPUDeviceDriver(state->gpuDevice.get()));
+				SDL_GetGPUDeviceDriver(state->gpu_device.get()));
 
-	state->pipeline = CreateGradientGraphicsPipeline(state->gpuDevice.get(), state->window.get());
+	state->pipeline = CreateGradientGraphicsPipeline(state->gpu_device.get(), state->window.get());
 	if (!state->pipeline) return SDL_APP_FAILURE;
 
 	return SDL_APP_CONTINUE;
@@ -195,7 +195,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 SDL_AppResult SDL_AppIterate(void *appstate) {
 	auto *state{static_cast<AppState *>(appstate)};
 
-	SDL_GPUCommandBuffer *cmd_buf{SDL_AcquireGPUCommandBuffer(state->gpuDevice.get())};
+	SDL_GPUCommandBuffer *cmd_buf{SDL_AcquireGPUCommandBuffer(state->gpu_device.get())};
 	if (!cmd_buf) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
 					 "SDL_AcquireGPUCommandBuffer() failed: %s",
