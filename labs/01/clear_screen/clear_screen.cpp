@@ -2,7 +2,7 @@
  * @file clear_screen.cpp
  * @author FaunJyng
  * @brief Cover the whole screen with an arbitraty color
- * @version 1
+ * @version 1.0
  * @date 15/11/2026
  */
 
