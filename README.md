@@ -18,8 +18,8 @@ A description and status of each lab is provided below.
 | `📁 01` | Gradient Background | Create a background with a smoothly changing RGB color gradient. | 🟢 |
 | `📁 02` | Vertex Buffer Triangle | Store three vertices in an `SDL_GPUBuffer` and use it to render a triangle. | 🟢 |
 | `📁 02` | Movable Triangle | Use ImGui to interactively reposition the triangle's three vertices. | 🟢 |
-| `📁 02` | Multiple Vertex Buffers | Store vertex positions and colors in two separate vertex buffers. | 🔴 |
-| `📁 02` | Triangle with Index Buffer | Use an index buffer to render a triangle. | 🔴 |
+| `📁 02` | Multiple Vertex Buffers | Store vertex positions and colors in two separate vertex buffers. | 🟢 |
+| `📁 02` | Triangle with Index Buffer | Use an index buffer to render a triangle. | 🟢 |
 | `📁 02` | Indexed Quad | Render a quad using four vertices and six indices. | 🔴 |
 | `📁 02` | Primitive Topology | Experiment with the primitive topologies supported by SDL3 and compare how they construct geometry. | 🔴 |
 | `📁 02` | Wireframe Geometry | Render geometric edges using line primitives instead of filled triangles. | 🔴 |

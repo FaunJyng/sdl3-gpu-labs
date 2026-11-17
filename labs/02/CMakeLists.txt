@@ -1,3 +1,4 @@
 add_subdirectory(vertex_buffer_triangle)
 add_subdirectory(movable_triangle)
 add_subdirectory(multiple_vertex_buffer)
+add_subdirectory(index_buffer)
