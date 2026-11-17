@@ -104,10 +104,12 @@ namespace {
 		vertex_buf_desc.instance_step_rate = 0;
 
 		SDL_GPUVertexAttribute vertex_attrs[2]{};
+
 		vertex_attrs[0].buffer_slot = 0;
 		vertex_attrs[0].location = 0;
 		vertex_attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
 		vertex_attrs[0].offset = offsetof(Vertex, position);
+
 		vertex_attrs[1].buffer_slot = 0;
 		vertex_attrs[1].location = 1;
 		vertex_attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
