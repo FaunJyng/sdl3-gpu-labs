@@ -20,7 +20,7 @@ A description and status of each lab is provided below.
 | `📁 02` | Movable Triangle | Use ImGui to interactively reposition the triangle's three vertices. | 🟢 |
 | `📁 02` | Multiple Vertex Buffers | Store vertex positions and colors in two separate vertex buffers. | 🟢 |
 | `📁 02` | Triangle with Index Buffer | Use an index buffer to render a triangle. | 🟢 |
-| `📁 02` | Indexed Quad | Render a quad using four vertices and six indices. | 🔴 |
+| `📁 02` | Indexed Quad | Render a quad using four vertices and six indices. | 🟢 |
 | `📁 02` | Primitive Topology | Experiment with the primitive topologies supported by SDL3 and compare how they construct geometry. | 🔴 |
 | `📁 02` | Wireframe Geometry | Render geometric edges using line primitives instead of filled triangles. | 🔴 |
 | `📁 03` | Push Constant Color | Pass color data from C++ to the Fragment Shader using push constants. | 🔴 |
