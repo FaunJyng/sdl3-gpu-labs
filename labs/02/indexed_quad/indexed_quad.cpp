@@ -296,7 +296,7 @@ namespace {
 }  // namespace
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
-	SDL_SetAppMetadata("Index Buffer", "1.0", "com.faunjyng.sld3labs");
+	SDL_SetAppMetadata("Indexed Quad", "1.0", "com.faunjyng.sld3labs");
 
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -308,7 +308,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 	auto* state{new AppState()};
 	*appstate = state;
 
-	state->window.reset(SDL_CreateWindow("Index Buffer", 800, 600, 0));
+	state->window.reset(SDL_CreateWindow("Indexed Quad", 800, 600, 0));
 	if (!state->window) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_CreateWindow() failed: %s",
