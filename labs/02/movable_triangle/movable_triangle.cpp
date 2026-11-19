@@ -2,7 +2,7 @@
  * @file movable_triangle.cpp
  * @author FaunJyng
  * @brief Use ImGui to interactively reposition the triangle's three vertices.
- * @version 1.0
+ * @version 2.0
  * @date 16/11/2026
  */
 
@@ -23,76 +23,202 @@ namespace {
 		float color[3];
 	};
 
+	using UniqueSDLWindow =
+		std::unique_ptr<SDL_Window, decltype(&SDL_DestroyWindow)>;
+
+	using UniqueSDLGPUDevice =
+		std::unique_ptr<SDL_GPUDevice, decltype(&SDL_DestroyGPUDevice)>;
+
+	template <typename T, auto ReleaseFunction>
+	struct GPUDResourceCleaner {
+		SDL_GPUDevice* device{nullptr};
+		void operator()(T* resource) const noexcept {
+			if (resource) ReleaseFunction(device, resource);
+		}
+	};
+
+	using UniqueGPUShader = std::unique_ptr<SDL_GPUShader,
+		GPUDResourceCleaner<SDL_GPUShader, SDL_ReleaseGPUShader>>;
+
+	using UniqueGPUBuffer = std::unique_ptr<SDL_GPUBuffer,
+		GPUDResourceCleaner<SDL_GPUBuffer, SDL_ReleaseGPUBuffer>>;
+
+	using UniqueGPUTransferBuffer = std::unique_ptr<SDL_GPUTransferBuffer,
+		GPUDResourceCleaner<SDL_GPUTransferBuffer,
+			SDL_ReleaseGPUTransferBuffer>>;
+
+	using UniqueGPUGraphicsPipeline = std::unique_ptr<SDL_GPUGraphicsPipeline,
+		GPUDResourceCleaner<SDL_GPUGraphicsPipeline,
+			SDL_ReleaseGPUGraphicsPipeline>>;
+
+	/*
+	 * Declared before GPU resources in AppState.
+	 * Reverse member-destruction order therefore releases pipelines/buffers
+	 * before releasing the window claim, and destroys the device afterwards.
+	 */
+	struct WindowClaimManger {
+		SDL_GPUDevice* device{nullptr};
+		SDL_Window* window{nullptr};
+
+		WindowClaimManger() = default;
+
+		WindowClaimManger(const WindowClaimManger&) = delete;
+		auto operator=(const WindowClaimManger&) -> WindowClaimManger& = delete;
+		WindowClaimManger(WindowClaimManger&&) = delete;
+		auto operator=(WindowClaimManger&&) -> WindowClaimManger& = delete;
+
+		~WindowClaimManger() {
+			if (device && window)
+				SDL_ReleaseWindowFromGPUDevice(device, window);
+		}
+	};
+
+	struct ImGuiManager {
+		bool imgui_initialized{false};
+
+		auto Init(SDL_Window* window, SDL_GPUDevice* device) -> bool {
+			IMGUI_CHECKVERSION();
+			ImGui::CreateContext();
+
+			ImGuiIO& io{ImGui::GetIO()};
+			io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+			ImGui::StyleColorsLight();
+			if (!ImGui_ImplSDL3_InitForSDLGPU(window)) {
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+					"ImGui_ImplSDL3_InitForSDLGPU() failed");
+				ImGui::DestroyContext();
+				return false;
+			}
+
+			SDL_GPUTextureFormat format{
+				SDL_GetGPUSwapchainTextureFormat(device, window)};
+			if (format == SDL_GPU_TEXTUREFORMAT_INVALID) {
+				ImGui_ImplSDL3_Shutdown();
+				ImGui::DestroyContext();
+				return false;
+			}
+
+			ImGui_ImplSDLGPU3_InitInfo init_info{};
+			init_info.Device = device;
+			init_info.ColorTargetFormat = format;
+			init_info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
+			if (!ImGui_ImplSDLGPU3_Init(&init_info)) {
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+					"ImGui_ImplSDLGPU3_Init() failed");
+				ImGui_ImplSDL3_Shutdown();
+				ImGui::DestroyContext();
+				return false;
+			}
+
+			imgui_initialized = true;
+			return true;
+		}
+
+		~ImGuiManager() {
+			if (imgui_initialized) {
+				ImGui_ImplSDL3_Shutdown();
+				ImGui_ImplSDLGPU3_Shutdown();
+				ImGui::DestroyContext();
+			}
+		}
+	};
+
 	namespace fs = std::filesystem;
 	template <typename... Args>
-	auto GetAbsolutePathRelativeToExe(std::string *output, Args &&...paths) -> bool {
-		const char *base_path{SDL_GetBasePath()};
-		if (base_path == nullptr) return false;
-		fs::path full_path{fs::path(base_path)};
-		((full_path /= std::forward<Args>(paths)), ...);
+	auto GetAbsolutePathRelativeToExe(std::string* output, Args&&... paths)
+		-> bool {
+		if (!output) return false;
+
+		const char* base_path{SDL_GetBasePath()};
+		if (!base_path) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+				"SDL_GetBasePath() failed: %s",
+				SDL_GetError());
+			return false;
+		}
+
+		fs::path full_path{base_path};
+		(full_path /= ... /= std::forward<Args>(paths));
+
 		*output = full_path.string();
 		return true;
 	}
 
-	auto LoadShader(SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage)
-		-> SDL_GPUShader * {
+	auto LoadShader(SDL_GPUDevice* device, const char* path,
+		SDL_GPUShaderStage stage) -> UniqueGPUShader {
+		if (!device || !path) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+				"LoadShader(): invalid device or path");
+			return {};
+		}
+
 		size_t code_size{0};
-		void *code{SDL_LoadFile(path, &code_size)};
+
+		std::unique_ptr<void, decltype(&SDL_free)> code{
+			SDL_LoadFile(path, &code_size),
+			SDL_free};
+
 		if (!code) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-						 "SDL_LoadFile() failed (%s): %s",
-						 path,
-						 SDL_GetError());
-			return nullptr;
+				"SDL_LoadFile() failed (%s): %s",
+				path,
+				SDL_GetError());
+			return {};
+		}
+
+		if (code_size == 0) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+				"Shader file is empty: %s",
+				path);
+			return {};
 		}
 
 		SDL_GPUShaderCreateInfo info{};
 		info.code_size = code_size;
-		info.code = static_cast<const Uint8 *>(code);
+		info.code = static_cast<const Uint8*>(code.get());
 		info.entrypoint = "main";
 		info.format = SDL_GPU_SHADERFORMAT_SPIRV;
 		info.stage = stage;
 
-		SDL_GPUShader *shader{SDL_CreateGPUShader(device, &info)};
-
-		SDL_free(code);
-
+		SDL_GPUShader* shader{SDL_CreateGPUShader(device, &info)};
 		if (!shader) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-						 "SDL_CreateGPUShader() failed (%s): %s",
-						 path,
-						 SDL_GetError());
+				"SDL_CreateGPUShader() failed (%s): %s",
+				path,
+				SDL_GetError());
+			return {};
 		}
 
-		return shader;
+		return UniqueGPUShader{shader,
+			GPUDResourceCleaner<SDL_GPUShader, SDL_ReleaseGPUShader>{device}};
 	}
 
-	auto CreateTriangleGraphicsPipeline(SDL_GPUDevice *device, SDL_Window *window)
-		-> SDL_GPUGraphicsPipeline * {
-		std::string tri_vert_path, tri_frag_path;
-		if (!GetAbsolutePathRelativeToExe(&tri_vert_path,
-										  "02",
-										  "vertex_buffer_triangle",
-										  "shaders",
-										  "triangle.vert.spv") ||
-			!GetAbsolutePathRelativeToExe(&tri_frag_path,
-										  "02",
-										  "vertex_buffer_triangle",
-										  "shaders",
-										  "triangle.frag.spv")) {
+	auto CreateTriangleGraphicsPipeline(SDL_GPUDevice* device,
+		SDL_Window* window) -> UniqueGPUGraphicsPipeline {
+		std::string vertex_shader_path, fragment_shader_path;
+		if (!GetAbsolutePathRelativeToExe(&vertex_shader_path,
+				"02",
+				"vertex_buffer_triangle",
+				"shaders",
+				"triangle.vert.spv") ||
+			!GetAbsolutePathRelativeToExe(&fragment_shader_path,
+				"02",
+				"vertex_buffer_triangle",
+				"shaders",
+				"triangle.frag.spv")) {
 			return nullptr;
 		}
 
-		SDL_GPUShader *vertex_shader{
-			LoadShader(device, tri_vert_path.data(), SDL_GPU_SHADERSTAGE_VERTEX)};
+		UniqueGPUShader vertex_shader{LoadShader(device,
+			vertex_shader_path.c_str(),
+			SDL_GPU_SHADERSTAGE_VERTEX)};
 		if (!vertex_shader) return nullptr;
 
-		SDL_GPUShader *fragment_shader{
-			LoadShader(device, tri_frag_path.data(), SDL_GPU_SHADERSTAGE_FRAGMENT)};
-		if (!fragment_shader) {
-			SDL_ReleaseGPUShader(device, vertex_shader);
-			return nullptr;
-		}
+		UniqueGPUShader fragment_shader{LoadShader(device,
+			fragment_shader_path.c_str(),
+			SDL_GPU_SHADERSTAGE_FRAGMENT)};
+		if (!fragment_shader) return nullptr;
 
 		SDL_GPUColorTargetDescription color_target{};
 		color_target.format = SDL_GetGPUSwapchainTextureFormat(device, window);
@@ -104,7 +230,6 @@ namespace {
 		vertex_buf_desc.instance_step_rate = 0;
 
 		SDL_GPUVertexAttribute vertex_attrs[2]{};
-
 		vertex_attrs[0].buffer_slot = 0;
 		vertex_attrs[0].location = 0;
 		vertex_attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
@@ -116,8 +241,9 @@ namespace {
 		vertex_attrs[1].offset = offsetof(Vertex, color);
 
 		SDL_GPUGraphicsPipelineCreateInfo info{};
-		info.vertex_shader = vertex_shader;
-		info.fragment_shader = fragment_shader;
+
+		info.vertex_shader = vertex_shader.get();
+		info.fragment_shader = fragment_shader.get();
 
 		info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 
@@ -134,35 +260,18 @@ namespace {
 		info.vertex_input_state.vertex_attributes = vertex_attrs;
 		info.vertex_input_state.num_vertex_attributes = 2;
 
-		SDL_GPUGraphicsPipeline *pipeline = SDL_CreateGPUGraphicsPipeline(device, &info);
-
-		SDL_ReleaseGPUShader(device, vertex_shader);
-		SDL_ReleaseGPUShader(device, fragment_shader);
-
+		SDL_GPUGraphicsPipeline* pipeline{
+			SDL_CreateGPUGraphicsPipeline(device, &info)};
 		if (!pipeline) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-						 "SDL_CreateGPUGraphicsPipeline() failed: %s",
-						 SDL_GetError());
+				"SDL_CreateGPUGraphicsPipeline() failed: %s",
+				SDL_GetError());
 		}
 
-		return pipeline;
+		return UniqueGPUGraphicsPipeline{pipeline,
+			GPUDResourceCleaner<SDL_GPUGraphicsPipeline,
+				SDL_ReleaseGPUGraphicsPipeline>{device}};
 	}
-
-	struct SDLWindowDestroyer {
-		void operator()(SDL_Window *window) const {
-			if (window) {
-				SDL_DestroyWindow(window);
-			}
-		}
-	};
-
-	struct SDLGPUDeviceDestroyer {
-		void operator()(SDL_GPUDevice *device) const {
-			if (device) {
-				SDL_DestroyGPUDevice(device);
-			}
-		}
-	};
 
 	constexpr Vertex INITIAL_VERTICES[3]{
 		{{0.0f, 0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -171,160 +280,152 @@ namespace {
 	};
 
 	struct AppState {
-		std::unique_ptr<SDL_Window, SDLWindowDestroyer> window;
-		std::unique_ptr<SDL_GPUDevice, SDLGPUDeviceDestroyer> gpu_device;
+		UniqueSDLWindow window{nullptr, SDL_DestroyWindow};
+		UniqueSDLGPUDevice device{nullptr, SDL_DestroyGPUDevice};
 		// Pipeline must be released before GPU device
-		SDL_GPUGraphicsPipeline *pipeline{nullptr};
-		Vertex vertices[3]{INITIAL_VERTICES[0], INITIAL_VERTICES[1], INITIAL_VERTICES[2]};
-		SDL_GPUBuffer *vertex_buffer{nullptr};
-		SDL_GPUTransferBuffer *transfer_buffer{nullptr};
-		bool window_claimed{false};
-		bool imgui_initialized{false};
+		WindowClaimManger window_claim_manager;
+
+		Vertex vertices[3]{INITIAL_VERTICES[0],
+			INITIAL_VERTICES[1],
+			INITIAL_VERTICES[2]};
+
+		UniqueGPUGraphicsPipeline pipeline{nullptr};
+		UniqueGPUBuffer vertex_buffer{nullptr};
+		UniqueGPUTransferBuffer transfer_buffer{nullptr};
+
+		ImGuiManager imgui_manager;
 
 		~AppState() {
-			if (gpu_device) {
-				SDL_WaitForGPUIdle(gpu_device.get());
-			}
-			if (imgui_initialized) {
-				ImGui_ImplSDL3_Shutdown();
-				ImGui_ImplSDLGPU3_Shutdown();
-				ImGui::DestroyContext();
-			}
-			if (transfer_buffer && gpu_device) {
-				SDL_ReleaseGPUTransferBuffer(gpu_device.get(), transfer_buffer);
-			}
-			if (vertex_buffer && gpu_device) {
-				SDL_ReleaseGPUBuffer(gpu_device.get(), vertex_buffer);
-			}
-			if (pipeline && gpu_device) {
-				SDL_ReleaseGPUGraphicsPipeline(gpu_device.get(), pipeline);
-			}
-			if (window_claimed && gpu_device && window) {
-				SDL_ReleaseWindowFromGPUDevice(gpu_device.get(), window.get());
-			}
+			if (device) SDL_WaitForGPUIdle(device.get());
 		}
 	};
 
-	auto CreateVertexResources(AppState &appstate) -> bool {
+	auto CreateVertexResources(AppState& appstate) -> bool {
 		const Uint32 size{static_cast<Uint32>(sizeof(appstate.vertices))};
 
-		SDL_GPUBufferCreateInfo buf_info{};
-		buf_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-		buf_info.size = size;
-		appstate.vertex_buffer = SDL_CreateGPUBuffer(appstate.gpu_device.get(), &buf_info);
+		SDL_GPUBufferCreateInfo buffer_info{};
+		buffer_info.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+		buffer_info.size = size;
+		appstate.vertex_buffer = UniqueGPUBuffer{
+			SDL_CreateGPUBuffer(appstate.device.get(), &buffer_info),
+			GPUDResourceCleaner<SDL_GPUBuffer, SDL_ReleaseGPUBuffer>{
+				appstate.device.get()}};
 		if (!appstate.vertex_buffer) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-						 "SDL_CreateGPUBuffer() failed: %s",
-						 SDL_GetError());
+				"SDL_CreateGPUBuffer() failed: %s",
+				SDL_GetError());
 			return false;
 		}
 
-		SDL_GPUTransferBufferCreateInfo trans_buf_info{};
-		trans_buf_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-		trans_buf_info.size = size;
-		appstate.transfer_buffer =
-			SDL_CreateGPUTransferBuffer(appstate.gpu_device.get(), &trans_buf_info);
-		if (!appstate.transfer_buffer) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-						 "SDL_CreateGPUTransferBuffer() failed: %s",
-						 SDL_GetError());
-			return false;
-		}
+		SDL_GPUTransferBufferCreateInfo transfer_buffer_info{};
+		transfer_buffer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+		transfer_buffer_info.size = size;
+		appstate.transfer_buffer = UniqueGPUTransferBuffer{
+			SDL_CreateGPUTransferBuffer(appstate.device.get(),
+				&transfer_buffer_info),
+			GPUDResourceCleaner<SDL_GPUTransferBuffer,
+				SDL_ReleaseGPUTransferBuffer>{appstate.device.get()}};
 		return true;
 	}
 
-	auto UploadVertices(AppState &appstate, SDL_GPUCommandBuffer *cmd_buf) -> bool {
-		SDL_GPUDevice *device{appstate.gpu_device.get()};
+	auto UploadVertices(AppState& appstate,
+		SDL_GPUCommandBuffer* command_buffer) -> bool {
+		SDL_GPUDevice* device{appstate.device.get()};
 		const Uint32 size{static_cast<Uint32>(sizeof(appstate.vertices))};
 
-		// cycle = true: If GPU still reading last frame data, SDL allocate new memory
-		void *mapped{SDL_MapGPUTransferBuffer(device, appstate.transfer_buffer, true)};
+		/** cycle = true: If GPU still reading last frame data, SDL allocate new
+		 * memory */
+		void* mapped{SDL_MapGPUTransferBuffer(device,
+			appstate.transfer_buffer.get(),
+			true)};
 		if (!mapped) return false;
 		SDL_memcpy(mapped, appstate.vertices, size);
-		SDL_UnmapGPUTransferBuffer(device, appstate.transfer_buffer);
+		SDL_UnmapGPUTransferBuffer(device, appstate.transfer_buffer.get());
 
-		SDL_GPUCopyPass *copy{SDL_BeginGPUCopyPass(cmd_buf)};
-		if (!copy) return false;
+		SDL_GPUCopyPass* copy_pass{SDL_BeginGPUCopyPass(command_buffer)};
+		if (!copy_pass) return false;
 
-		SDL_GPUTransferBufferLocation src{};
-		src.transfer_buffer = appstate.transfer_buffer;
-		src.offset = 0;
+		SDL_GPUTransferBufferLocation source{};
+		source.transfer_buffer = appstate.transfer_buffer.get();
+		source.offset = 0;
 
-		SDL_GPUBufferRegion dst{};
-		dst.buffer = appstate.vertex_buffer;
-		dst.offset = 0;
-		dst.size = size;
+		SDL_GPUBufferRegion destination{};
+		destination.buffer = appstate.vertex_buffer.get();
+		destination.offset = 0;
+		destination.size = size;
 
-		SDL_UploadToGPUBuffer(copy, &src, &dst, true);	// cycle = true
-		SDL_EndGPUCopyPass(copy);
+		SDL_UploadToGPUBuffer(copy_pass, &source, &destination, true);
+
+		SDL_EndGPUCopyPass(copy_pass);
+
 		return true;
 	}
 }  // namespace
 
-SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
-	SDL_SetAppMetadata("Vertex Buffer Triangle", "1.0", "com.faunjyng.sld3labs");
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
+	SDL_SetAppMetadata("Movable Triangle", "2.0", "com.faunjyng.sld3labs");
 
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init() failed: %s", SDL_GetError());
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			"SDL_Init() failed: %s",
+			SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
-	auto *state{new AppState()};
+	auto* state{new AppState()};
 	*appstate = state;
 
-	state->window.reset(SDL_CreateWindow("Vertex Buffer Triangle", 800, 600, 0));
-	if (!state->window) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateWindow() failed: %s", SDL_GetError());
+	UniqueSDLWindow window{SDL_CreateWindow("Movable Triangle", 800, 600, 0),
+		SDL_DestroyWindow};
+	if (!window) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			"SDL_CreateWindow() failed: %s",
+			SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
-	state->gpu_device.reset(SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr));
-	if (!state->gpu_device) {
+	UniqueSDLGPUDevice device{
+		SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr),
+		SDL_DestroyGPUDevice};
+	if (!device) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-					 "SDL_CreateGPUDevice() failed: %s",
-					 SDL_GetError());
+			"SDL_CreateGPUDevice() failed: %s",
+			SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
-	if (!SDL_ClaimWindowForGPUDevice(state->gpu_device.get(), state->window.get())) {
+
+	state->window = std::move(window);
+	state->device = std::move(device);
+
+	if (!SDL_ClaimWindowForGPUDevice(state->device.get(),
+			state->window.get())) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-					 "SDL_ClaimWindowForGPUDevice() failed: %s",
-					 SDL_GetError());
+			"SDL_ClaimWindowForGPUDevice() failed: %s",
+			SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
-	state->window_claimed = true;
+
+	state->window_claim_manager.device = state->device.get();
+	state->window_claim_manager.window = state->window.get();
 
 	SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-				"GPU backend: %s",
-				SDL_GetGPUDeviceDriver(state->gpu_device.get()));
+		"GPU backend: %s",
+		SDL_GetGPUDeviceDriver(state->device.get()));
 
-	state->pipeline = CreateTriangleGraphicsPipeline(state->gpu_device.get(), state->window.get());
+	state->pipeline = CreateTriangleGraphicsPipeline(state->device.get(),
+		state->window.get());
 	if (!state->pipeline) return SDL_APP_FAILURE;
 
 	if (!CreateVertexResources(*state)) return SDL_APP_FAILURE;
 
-	// ImGui
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO &io{ImGui::GetIO()};
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-	ImGui::StyleColorsLight();
-
-	ImGui_ImplSDL3_InitForSDLGPU(state->window.get());
-
-	ImGui_ImplSDLGPU3_InitInfo init_info{};
-	init_info.Device = state->gpu_device.get();
-	init_info.ColorTargetFormat =
-		SDL_GetGPUSwapchainTextureFormat(state->gpu_device.get(), state->window.get());
-	init_info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
-	ImGui_ImplSDLGPU3_Init(&init_info);
-
-	state->imgui_initialized = true;
+	if (!state->imgui_manager.Init(state->window.get(), state->device.get()))
+		return SDL_APP_FAILURE;
 
 	return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppIterate(void *appstate) {
-	auto *state{static_cast<AppState *>(appstate)};
+SDL_AppResult SDL_AppIterate(void* appstate) {
+	auto* state{static_cast<AppState*>(appstate)};
 
 	// ImGui
 	ImGui_ImplSDLGPU3_NewFrame();
@@ -332,11 +433,14 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 	ImGui::NewFrame();
 
 	ImGui::Begin("Triangle Controls");
-	const char *names[3]{"Vertex 0", "Vertex 1", "Vertex 2"};
+	const char* names[3]{"Vertex 0", "Vertex 1", "Vertex 2"};
 	for (int i = 0; i < 3; ++i) {
 		ImGui::PushID(i);
 		if (ImGui::CollapsingHeader(names[i], ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::SliderFloat2("Position", state->vertices[i].position, -10.0f, 10.0f);
+			ImGui::SliderFloat2("Position",
+				state->vertices[i].position,
+				-10.0f,
+				10.0f);
 			ImGui::ColorEdit3("Color", state->vertices[i].color);
 		}
 		ImGui::PopID();
@@ -347,42 +451,42 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 	ImGui::End();
 
 	ImGui::Render();
-	ImDrawData *draw_data{ImGui::GetDrawData()};
+	ImDrawData* draw_data{ImGui::GetDrawData()};
 
 	// SDL3
-	SDL_GPUCommandBuffer *cmd_buf{SDL_AcquireGPUCommandBuffer(state->gpu_device.get())};
-	if (!cmd_buf) {
+	SDL_GPUCommandBuffer* command_buffer{
+		SDL_AcquireGPUCommandBuffer(state->device.get())};
+	if (!command_buffer) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-					 "SDL_AcquireGPUCommandBuffer() failed: %s",
-					 SDL_GetError());
+			"SDL_AcquireGPUCommandBuffer() failed: %s",
+			SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
-	SDL_GPUTexture *swapchain_texture{nullptr};
-	Uint32 width{0};
-	Uint32 height{0};
-	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buf,
-											   state->window.get(),
-											   &swapchain_texture,
-											   &width,
-											   &height)) {
+	SDL_GPUTexture* swapchain_texture{nullptr};
+
+	if (!SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer,
+			state->window.get(),
+			&swapchain_texture,
+			nullptr,
+			nullptr)) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-					 "SDL_WaitAndAcquireGPUSwapchainTexture() failed: %s",
-					 SDL_GetError());
-		SDL_CancelGPUCommandBuffer(cmd_buf);
+			"SDL_WaitAndAcquireGPUSwapchainTexture() failed: %s",
+			SDL_GetError());
+		SDL_CancelGPUCommandBuffer(command_buffer);
 		return SDL_APP_FAILURE;
 	}
 
 	if (swapchain_texture) {
-		if (!UploadVertices(*state, cmd_buf)) {
+		if (!UploadVertices(*state, command_buffer)) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-						 "UploadVertices() failed: %s",
-						 SDL_GetError());
-			SDL_CancelGPUCommandBuffer(cmd_buf);
+				"UploadVertices() failed: %s",
+				SDL_GetError());
+			SDL_CancelGPUCommandBuffer(command_buffer);
 			return SDL_APP_FAILURE;
 		}
 
-		ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmd_buf);
+		ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, command_buffer);
 
 		SDL_GPUColorTargetInfo target{};
 		target.texture = swapchain_texture;
@@ -390,48 +494,54 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 		target.load_op = SDL_GPU_LOADOP_CLEAR;
 		target.store_op = SDL_GPU_STOREOP_STORE;
 
-		SDL_GPURenderPass *pass{SDL_BeginGPURenderPass(cmd_buf, &target, 1, nullptr)};
-		if (!pass) {
+		SDL_GPURenderPass* render_pass{
+			SDL_BeginGPURenderPass(command_buffer, &target, 1, nullptr)};
+		if (!render_pass) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-						 "SDL_BeginGPURenderPass() failed: %s",
-						 SDL_GetError());
+				"SDL_BeginGPURenderPass() failed: %s",
+				SDL_GetError());
+			SDL_CancelGPUCommandBuffer(command_buffer);
 			return SDL_APP_FAILURE;
 		}
 
-		SDL_BindGPUGraphicsPipeline(pass, state->pipeline);
+		SDL_BindGPUGraphicsPipeline(render_pass, state->pipeline.get());
 
 		SDL_GPUBufferBinding binding{};
-		binding.buffer = state->vertex_buffer;
+		binding.buffer = state->vertex_buffer.get();
 		binding.offset = 0;
-		SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
+		SDL_BindGPUVertexBuffers(render_pass, 0, &binding, 1);
 
-		SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
-		ImGui_ImplSDLGPU3_RenderDrawData(draw_data, cmd_buf, pass);
+		SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
+		ImGui_ImplSDLGPU3_RenderDrawData(draw_data,
+			command_buffer,
+			render_pass);
 
-		SDL_EndGPURenderPass(pass);
+		SDL_EndGPURenderPass(render_pass);
 	}
 
-	if (!SDL_SubmitGPUCommandBuffer(cmd_buf)) {
+	if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-					 "SDL_SubmitGPUCommandBuffer() failed: %s",
-					 SDL_GetError());
+			"SDL_SubmitGPUCommandBuffer() failed: %s",
+			SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
 	return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+	(void)appstate;
+
 	ImGui_ImplSDL3_ProcessEvent(event);
 	if (event->type == SDL_EVENT_QUIT) {
 		return SDL_APP_SUCCESS;
 	}
+
 	return SDL_APP_CONTINUE;
 }
 
-void SDL_AppQuit(void *appstate, SDL_AppResult result) {
-	if (appstate) {
-		AppState *state{static_cast<AppState *>(appstate)};
-		delete state;
-	}
+void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+	(void)result;
+
+	delete static_cast<AppState*>(appstate);
 }

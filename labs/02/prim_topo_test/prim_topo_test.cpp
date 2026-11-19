@@ -26,15 +26,6 @@ namespace {
 		float color[3];
 	};
 
-	constexpr Vertex VERTICES[]{
-		{{-0.8f, -0.6f}, {1.0f, 0.0f, 0.0f}},
-		{{-0.8f, 0.6f}, {0.0f, 1.0f, 0.0f}},
-		{{0.0f, -0.6f}, {0.0f, 0.0f, 1.0f}},
-		{{0.0f, 0.6f}, {1.0f, 0.0f, 0.0f}},
-		{{0.8f, -0.6f}, {0.0f, 1.0f, 0.0f}},
-		{{0.8f, 0.6f}, {0.0f, 0.0f, 1.0f}},
-	};
-
 	using UniqueSDLWindow =
 		std::unique_ptr<SDL_Window, decltype(&SDL_DestroyWindow)>;
 
@@ -62,18 +53,6 @@ namespace {
 	using UniqueGPUGraphicsPipeline = std::unique_ptr<SDL_GPUGraphicsPipeline,
 		GPUDResourceCleaner<SDL_GPUGraphicsPipeline,
 			SDL_ReleaseGPUGraphicsPipeline>>;
-
-	struct SDLWindowDestroyer {
-		void operator()(SDL_Window* window) const noexcept {
-			if (window) SDL_DestroyWindow(window);
-		}
-	};
-
-	struct SDLGPUDeviceDestroyer {
-		void operator()(SDL_GPUDevice* device) const noexcept {
-			if (device) SDL_DestroyGPUDevice(device);
-		}
-	};
 
 	/*
 	 * Declared before GPU resources in AppState.
@@ -148,6 +127,27 @@ namespace {
 		}
 	};
 
+	namespace fs = std::filesystem;
+	template <typename... Args>
+	auto GetAbsolutePathRelativeToExe(std::string* output, Args&&... paths)
+		-> bool {
+		if (!output) return false;
+
+		const char* base_path{SDL_GetBasePath()};
+		if (!base_path) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+				"SDL_GetBasePath() failed: %s",
+				SDL_GetError());
+			return false;
+		}
+
+		fs::path full_path{base_path};
+		(full_path /= ... /= std::forward<Args>(paths));
+
+		*output = full_path.string();
+		return true;
+	}
+
 	auto CreateBuffer(SDL_GPUDevice* device, SDL_GPUBufferUsageFlags usage,
 		const void* data, Uint32 size) -> UniqueGPUBuffer {
 		if (!device || !data || size == 0 || usage == 0) {
@@ -186,8 +186,8 @@ namespace {
 			return {};
 		}
 
-		void* mapped =
-			SDL_MapGPUTransferBuffer(device, transfer_buffer.get(), false);
+		void* mapped{
+			SDL_MapGPUTransferBuffer(device, transfer_buffer.get(), false)};
 
 		if (!mapped) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -239,27 +239,6 @@ namespace {
 		}
 
 		return buffer;
-	}
-
-	namespace fs = std::filesystem;
-	template <typename... Args>
-	auto GetAbsolutePathRelativeToExe(std::string* output, Args&&... paths)
-		-> bool {
-		if (!output) return false;
-
-		const char* base_path = SDL_GetBasePath();
-		if (!base_path) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-				"SDL_GetBasePath() failed: %s",
-				SDL_GetError());
-			return false;
-		}
-
-		fs::path full_path{base_path};
-		(full_path /= ... /= std::forward<Args>(paths));
-
-		*output = full_path.string();
-		return true;
 	}
 
 	auto LoadShader(SDL_GPUDevice* device, const char* path,
@@ -339,7 +318,6 @@ namespace {
 		vertex_buffer_desc.instance_step_rate = 0;
 
 		SDL_GPUVertexAttribute vertex_attributes[2]{};
-
 		vertex_attributes[0].buffer_slot = 0;
 		vertex_attributes[0].location = 0;
 		vertex_attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
@@ -382,6 +360,15 @@ namespace {
 			GPUDResourceCleaner<SDL_GPUGraphicsPipeline,
 				SDL_ReleaseGPUGraphicsPipeline>{device}};
 	}
+
+	constexpr Vertex VERTICES[6]{
+		{{-0.8f, -0.6f}, {1.0f, 0.0f, 0.0f}},
+		{{-0.8f, 0.6f}, {0.0f, 1.0f, 0.0f}},
+		{{0.0f, -0.6f}, {0.0f, 0.0f, 1.0f}},
+		{{0.0f, 0.6f}, {1.0f, 0.0f, 0.0f}},
+		{{0.8f, -0.6f}, {0.0f, 1.0f, 0.0f}},
+		{{0.8f, 0.6f}, {0.0f, 0.0f, 1.0f}},
+	};
 
 	struct AppState {
 		UniqueSDLWindow window{nullptr, SDL_DestroyWindow};
@@ -429,10 +416,22 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 	UniqueSDLWindow window{
 		SDL_CreateWindow("Primitive Topology Test", 900, 700, 0),
 		SDL_DestroyWindow};
+	if (!window) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			"SDL_CreateWindow() failed: %s",
+			SDL_GetError());
+		return SDL_APP_FAILURE;
+	}
 
 	UniqueSDLGPUDevice device{
 		SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr),
 		SDL_DestroyGPUDevice};
+	if (!device) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			"SDL_CreateGPUDevice() failed: %s",
+			SDL_GetError());
+		return SDL_APP_FAILURE;
+	}
 
 	state->window = std::move(window);
 	state->device = std::move(device);
@@ -553,14 +552,12 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 	}
 
 	SDL_GPUTexture* swapchain_texture{nullptr};
-	Uint32 width{0};
-	Uint32 height{0};
 
 	if (!SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer,
 			state->window.get(),
 			&swapchain_texture,
-			&width,
-			&height)) {
+			nullptr,
+			nullptr)) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_WaitAndAcquireGPUSwapchainTexture() failed: %s",
 			SDL_GetError());
@@ -577,8 +574,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 		target.load_op = SDL_GPU_LOADOP_CLEAR;
 		target.store_op = SDL_GPU_STOREOP_STORE;
 
-		SDL_GPURenderPass* render_pass =
-			SDL_BeginGPURenderPass(command_buffer, &target, 1, nullptr);
+		SDL_GPURenderPass* render_pass{
+			SDL_BeginGPURenderPass(command_buffer, &target, 1, nullptr)};
 
 		if (!render_pass) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -653,5 +650,6 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 	(void)result;
+
 	delete static_cast<AppState*>(appstate);
 }
