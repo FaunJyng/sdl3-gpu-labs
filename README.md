@@ -22,8 +22,7 @@ A description and status of each lab is provided below.
 | `📁 02` | Triangle with Index Buffer | Use an index buffer to render a triangle. | 🟢 |
 | `📁 02` | Indexed Quad | Render a quad using four vertices and six indices. | 🟢 |
 | `📁 02` | Primitive Topology | Experiment with the primitive topologies supported by SDL3 and compare how they construct geometry. | 🟢 |
-| `📁 02` | Wireframe Geometry | Render geometric edges using line primitives instead of filled triangles. | 🔴 |
-| `📁 03` | Push Constant Color | Pass color data from C++ to the Fragment Shader using push constants. | 🔴 |
+| `📁 03` | Push Constant Color | Pass color data from C++ to the Fragment Shader using push constants. Render three triangles with different base colors. | 🟢 |
 | `📁 03` | Push Constant Position | Pass position coordinates to control the triangle's position. | 🔴 |
 | `📁 03` | Time Uniform | Pass time information from the CPU to the shader to create animations. | 🔴 |
 | `📁 03` | Scale Transformation | Scale a triangle up and down. | 🔴 |
