@@ -30,7 +30,6 @@ A description and status of each lab is provided below.
 | `📁 03` | Translation Transformation | Move geometry using translation transformations. | 🔴 |
 | `📁 03` | Combined Transformations | Combine translation, rotation, and scaling transformations. | 🔴 |
 | `📁 03` | Multiple Objects | Render multiple objects, each with its own transformation. | 🔴 |
-| `📁 03` | Per-object Color | Pass different colors to individual objects using push constants. | 🔴 |
 | `📁 03` | Transform Matrix | Use 3×3 or 4×4 matrices to transform vertices in HLSL. | 🔴 |
 | `📁 04` | Load Image Texture | Load an image and upload it as a GPU texture. | 🔴 |
 | `📁 04` | Texture Mapping | Map a texture onto a quad using UV coordinates. | 🔴 |
