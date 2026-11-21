@@ -10,11 +10,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include <cstddef>
 #include <filesystem>
 #include <memory>
-#include <string>
-#include <utility>
 
 namespace {
 	struct Vertex {

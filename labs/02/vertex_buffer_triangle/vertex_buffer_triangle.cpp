@@ -30,23 +30,30 @@ namespace {
 	template <typename T, auto ReleaseFunction>
 	struct GPUDResourceCleaner {
 		SDL_GPUDevice* device{nullptr};
-		void operator()(T* resource) const noexcept {
+		void operator()(T* resource) const noexcept
+		{
 			if (resource) ReleaseFunction(device, resource);
 		}
 	};
 
-	using UniqueGPUShader = std::unique_ptr<SDL_GPUShader,
+	using UniqueGPUShader = std::unique_ptr<
+		SDL_GPUShader,
 		GPUDResourceCleaner<SDL_GPUShader, SDL_ReleaseGPUShader>>;
 
-	using UniqueGPUBuffer = std::unique_ptr<SDL_GPUBuffer,
+	using UniqueGPUBuffer = std::unique_ptr<
+		SDL_GPUBuffer,
 		GPUDResourceCleaner<SDL_GPUBuffer, SDL_ReleaseGPUBuffer>>;
 
-	using UniqueGPUTransferBuffer = std::unique_ptr<SDL_GPUTransferBuffer,
-		GPUDResourceCleaner<SDL_GPUTransferBuffer,
+	using UniqueGPUTransferBuffer = std::unique_ptr<
+		SDL_GPUTransferBuffer,
+		GPUDResourceCleaner<
+			SDL_GPUTransferBuffer,
 			SDL_ReleaseGPUTransferBuffer>>;
 
-	using UniqueGPUGraphicsPipeline = std::unique_ptr<SDL_GPUGraphicsPipeline,
-		GPUDResourceCleaner<SDL_GPUGraphicsPipeline,
+	using UniqueGPUGraphicsPipeline = std::unique_ptr<
+		SDL_GPUGraphicsPipeline,
+		GPUDResourceCleaner<
+			SDL_GPUGraphicsPipeline,
 			SDL_ReleaseGPUGraphicsPipeline>>;
 
 	/*
@@ -65,7 +72,8 @@ namespace {
 		WindowClaimManger(WindowClaimManger&&) = delete;
 		auto operator=(WindowClaimManger&&) -> WindowClaimManger& = delete;
 
-		~WindowClaimManger() {
+		~WindowClaimManger()
+		{
 			if (device && window)
 				SDL_ReleaseWindowFromGPUDevice(device, window);
 		}
@@ -77,11 +85,18 @@ namespace {
 		{{0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
 	};
 
-	auto CreateBuffer(SDL_GPUDevice* device, SDL_GPUBufferUsageFlags usage,
-		const void* data, Uint32 size) -> UniqueGPUBuffer {
+	auto CreateBuffer(
+		SDL_GPUDevice* device,
+		SDL_GPUBufferUsageFlags usage,
+		const void* data,
+		Uint32 size
+	) -> UniqueGPUBuffer
+	{
 		if (!device || !data || size == 0 || usage == 0) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-				"CreateBuffer(): invalid device, usage, data, or size");
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"CreateBuffer(): invalid device, usage, data, or size"
+			);
 			return {};
 		}
 
@@ -89,12 +104,16 @@ namespace {
 		buffer_info.usage = usage;
 		buffer_info.size = size;
 
-		UniqueGPUBuffer buffer{SDL_CreateGPUBuffer(device, &buffer_info),
-			GPUDResourceCleaner<SDL_GPUBuffer, SDL_ReleaseGPUBuffer>{device}};
+		UniqueGPUBuffer buffer{
+			SDL_CreateGPUBuffer(device, &buffer_info),
+			GPUDResourceCleaner<SDL_GPUBuffer, SDL_ReleaseGPUBuffer>{device}
+		};
 		if (!buffer) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_CreateGPUBuffer() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return {};
 		}
 
@@ -104,41 +123,52 @@ namespace {
 
 		UniqueGPUTransferBuffer transfer_buffer{
 			SDL_CreateGPUTransferBuffer(device, &transfer_buffer_info),
-			GPUDResourceCleaner<SDL_GPUTransferBuffer,
-				SDL_ReleaseGPUTransferBuffer>{device}};
+			GPUDResourceCleaner<
+				SDL_GPUTransferBuffer,
+				SDL_ReleaseGPUTransferBuffer>{device}
+		};
 
 		if (!transfer_buffer) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_CreateGPUTransferBuffer() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return {};
 		}
 
 		void* mapped{
-			SDL_MapGPUTransferBuffer(device, transfer_buffer.get(), false)};
+			SDL_MapGPUTransferBuffer(device, transfer_buffer.get(), false)
+		};
 		if (!mapped) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_MapGPUTransferBuffer() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return {};
 		}
 		SDL_memcpy(mapped, data, size);
 		SDL_UnmapGPUTransferBuffer(device, transfer_buffer.get());
 
-		SDL_GPUCommandBuffer* command_buffer{
-			SDL_AcquireGPUCommandBuffer(device)};
+		SDL_GPUCommandBuffer* command_buffer{SDL_AcquireGPUCommandBuffer(device)
+		};
 		if (!command_buffer) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_AcquireGPUCommandBuffer() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return {};
 		}
 
 		SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
 		if (!copy_pass) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_BeginGPUCopyPass() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			SDL_CancelGPUCommandBuffer(command_buffer);
 			return {};
 		}
@@ -157,9 +187,11 @@ namespace {
 		SDL_EndGPUCopyPass(copy_pass);
 
 		if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_SubmitGPUCommandBuffer() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return {};
 		}
 
@@ -169,14 +201,17 @@ namespace {
 	namespace fs = std::filesystem;
 	template <typename... Args>
 	auto GetAbsolutePathRelativeToExe(std::string* output, Args&&... paths)
-		-> bool {
+		-> bool
+	{
 		if (!output) return false;
 
 		const char* base_path{SDL_GetBasePath()};
 		if (!base_path) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_GetBasePath() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return false;
 		}
 
@@ -187,11 +222,17 @@ namespace {
 		return true;
 	}
 
-	auto LoadShader(SDL_GPUDevice* device, const char* path,
-		SDL_GPUShaderStage stage) -> UniqueGPUShader {
+	auto LoadShader(
+		SDL_GPUDevice* device,
+		const char* path,
+		SDL_GPUShaderStage stage
+	) -> UniqueGPUShader
+	{
 		if (!device || !path) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-				"LoadShader(): invalid device or path");
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"LoadShader(): invalid device or path"
+			);
 			return {};
 		}
 
@@ -199,20 +240,25 @@ namespace {
 
 		std::unique_ptr<void, decltype(&SDL_free)> code{
 			SDL_LoadFile(path, &code_size),
-			SDL_free};
+			SDL_free
+		};
 
 		if (!code) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_LoadFile() failed (%s): %s",
 				path,
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return {};
 		}
 
 		if (code_size == 0) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"Shader file is empty: %s",
-				path);
+				path
+			);
 			return {};
 		}
 
@@ -225,41 +271,56 @@ namespace {
 
 		SDL_GPUShader* shader{SDL_CreateGPUShader(device, &info)};
 		if (!shader) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_CreateGPUShader() failed (%s): %s",
 				path,
-				SDL_GetError());
+				SDL_GetError()
+			);
 			return {};
 		}
 
-		return UniqueGPUShader{shader,
-			GPUDResourceCleaner<SDL_GPUShader, SDL_ReleaseGPUShader>{device}};
+		return UniqueGPUShader{
+			shader,
+			GPUDResourceCleaner<SDL_GPUShader, SDL_ReleaseGPUShader>{device}
+		};
 	}
 
-	auto CreateTriangleGraphicsPipeline(SDL_GPUDevice* device,
-		SDL_Window* window) -> UniqueGPUGraphicsPipeline {
+	auto CreateTriangleGraphicsPipeline(
+		SDL_GPUDevice* device,
+		SDL_Window* window
+	) -> UniqueGPUGraphicsPipeline
+	{
 		std::string vertex_shader_path, fragment_shader_path;
-		if (!GetAbsolutePathRelativeToExe(&vertex_shader_path,
+		if (!GetAbsolutePathRelativeToExe(
+				&vertex_shader_path,
 				"02",
 				"vertex_buffer_triangle",
 				"shaders",
-				"triangle.vert.spv") ||
-			!GetAbsolutePathRelativeToExe(&fragment_shader_path,
+				"triangle.vert.spv"
+			) ||
+			!GetAbsolutePathRelativeToExe(
+				&fragment_shader_path,
 				"02",
 				"vertex_buffer_triangle",
 				"shaders",
-				"triangle.frag.spv")) {
+				"triangle.frag.spv"
+			)) {
 			return nullptr;
 		}
 
-		UniqueGPUShader vertex_shader{LoadShader(device,
+		UniqueGPUShader vertex_shader{LoadShader(
+			device,
 			vertex_shader_path.c_str(),
-			SDL_GPU_SHADERSTAGE_VERTEX)};
+			SDL_GPU_SHADERSTAGE_VERTEX
+		)};
 		if (!vertex_shader) return nullptr;
 
-		UniqueGPUShader fragment_shader{LoadShader(device,
+		UniqueGPUShader fragment_shader{LoadShader(
+			device,
 			fragment_shader_path.c_str(),
-			SDL_GPU_SHADERSTAGE_FRAGMENT)};
+			SDL_GPU_SHADERSTAGE_FRAGMENT
+		)};
 		if (!fragment_shader) return nullptr;
 
 		SDL_GPUColorTargetDescription color_target{};
@@ -302,16 +363,22 @@ namespace {
 		info.vertex_input_state.num_vertex_attributes = 2;
 
 		SDL_GPUGraphicsPipeline* pipeline{
-			SDL_CreateGPUGraphicsPipeline(device, &info)};
+			SDL_CreateGPUGraphicsPipeline(device, &info)
+		};
 		if (!pipeline) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_CreateGPUGraphicsPipeline() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 		}
 
-		return UniqueGPUGraphicsPipeline{pipeline,
-			GPUDResourceCleaner<SDL_GPUGraphicsPipeline,
-				SDL_ReleaseGPUGraphicsPipeline>{device}};
+		return UniqueGPUGraphicsPipeline{
+			pipeline,
+			GPUDResourceCleaner<
+				SDL_GPUGraphicsPipeline,
+				SDL_ReleaseGPUGraphicsPipeline>{device}
+		};
 	}
 
 	struct AppState {
@@ -326,18 +393,23 @@ namespace {
 	};
 }  // namespace
 
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
+{
 	(void)argc;
 	(void)argv;
 
-	SDL_SetAppMetadata("Vertex Buffer Triangle",
+	SDL_SetAppMetadata(
+		"Vertex Buffer Triangle",
 		"2.0",
-		"com.faunjyng.sld3labs");
+		"com.faunjyng.sld3labs"
+	);
 
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_Init() failed: %s",
-			SDL_GetError());
+			SDL_GetError()
+		);
 		return SDL_APP_FAILURE;
 	}
 
@@ -346,76 +418,100 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
 	UniqueSDLWindow window{
 		SDL_CreateWindow("Vertex Buffer Triangle", 800, 600, 0),
-		SDL_DestroyWindow};
+		SDL_DestroyWindow
+	};
 	if (!window) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_CreateWindow() failed: %s",
-			SDL_GetError());
+			SDL_GetError()
+		);
 		return SDL_APP_FAILURE;
 	}
 
 	UniqueSDLGPUDevice device{
 		SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr),
-		SDL_DestroyGPUDevice};
+		SDL_DestroyGPUDevice
+	};
 	if (!device) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_CreateGPUDevice() failed: %s",
-			SDL_GetError());
+			SDL_GetError()
+		);
 		return SDL_APP_FAILURE;
 	}
 
 	state->window = std::move(window);
 	state->device = std::move(device);
 
-	if (!SDL_ClaimWindowForGPUDevice(state->device.get(),
-			state->window.get())) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+	if (!SDL_ClaimWindowForGPUDevice(
+			state->device.get(),
+			state->window.get()
+		)) {
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_ClaimWindowForGPUDevice() failed: %s",
-			SDL_GetError());
+			SDL_GetError()
+		);
 		return SDL_APP_FAILURE;
 	}
 
 	state->window_claim_manager.device = state->device.get();
 	state->window_claim_manager.window = state->window.get();
 
-	SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+	SDL_LogInfo(
+		SDL_LOG_CATEGORY_APPLICATION,
 		"GPU backend: %s",
-		SDL_GetGPUDeviceDriver(state->device.get()));
+		SDL_GetGPUDeviceDriver(state->device.get())
+	);
 
-	state->pipeline = CreateTriangleGraphicsPipeline(state->device.get(),
-		state->window.get());
+	state->pipeline = CreateTriangleGraphicsPipeline(
+		state->device.get(),
+		state->window.get()
+	);
 	if (!state->pipeline) return SDL_APP_FAILURE;
 
-	state->vertex_buffer = CreateBuffer(state->device.get(),
+	state->vertex_buffer = CreateBuffer(
+		state->device.get(),
 		SDL_GPU_BUFFERUSAGE_VERTEX,
 		VERTICES,
-		sizeof(VERTICES));
+		sizeof(VERTICES)
+	);
 	if (!state->vertex_buffer) return SDL_APP_FAILURE;
 
 	return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppIterate(void* appstate) {
+SDL_AppResult SDL_AppIterate(void* appstate)
+{
 	auto* state{static_cast<AppState*>(appstate)};
 
 	SDL_GPUCommandBuffer* command_buffer{
-		SDL_AcquireGPUCommandBuffer(state->device.get())};
+		SDL_AcquireGPUCommandBuffer(state->device.get())
+	};
 	if (!command_buffer) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_AcquireGPUCommandBuffer() failed: %s",
-			SDL_GetError());
+			SDL_GetError()
+		);
 		return SDL_APP_FAILURE;
 	}
 
 	SDL_GPUTexture* swapchain_texture{nullptr};
-	if (!SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer,
+	if (!SDL_WaitAndAcquireGPUSwapchainTexture(
+			command_buffer,
 			state->window.get(),
 			&swapchain_texture,
 			nullptr,
-			nullptr)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			nullptr
+		)) {
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_WaitAndAcquireGPUSwapchainTexture() failed: %s",
-			SDL_GetError());
+			SDL_GetError()
+		);
 		SDL_CancelGPUCommandBuffer(command_buffer);
 		return SDL_APP_FAILURE;
 	}
@@ -428,11 +524,14 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 		target.store_op = SDL_GPU_STOREOP_STORE;
 
 		SDL_GPURenderPass* render_pass{
-			SDL_BeginGPURenderPass(command_buffer, &target, 1, nullptr)};
+			SDL_BeginGPURenderPass(command_buffer, &target, 1, nullptr)
+		};
 		if (!render_pass) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+			SDL_LogError(
+				SDL_LOG_CATEGORY_APPLICATION,
 				"SDL_BeginGPURenderPass() failed: %s",
-				SDL_GetError());
+				SDL_GetError()
+			);
 			SDL_CancelGPUCommandBuffer(command_buffer);
 			return SDL_APP_FAILURE;
 		}
@@ -450,16 +549,19 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 	}
 
 	if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		SDL_LogError(
+			SDL_LOG_CATEGORY_APPLICATION,
 			"SDL_SubmitGPUCommandBuffer() failed: %s",
-			SDL_GetError());
+			SDL_GetError()
+		);
 		return SDL_APP_FAILURE;
 	}
 
 	return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
+{
 	(void)appstate;
 
 	if (event->type == SDL_EVENT_QUIT) {
@@ -469,7 +571,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 	return SDL_APP_CONTINUE;
 }
 
-void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+void SDL_AppQuit(void* appstate, SDL_AppResult result)
+{
 	(void)result;
 
 	delete static_cast<AppState*>(appstate);
