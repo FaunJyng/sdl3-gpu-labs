@@ -9,7 +9,7 @@ auto GPUBufferUploader::report(std::string_view message) const -> void
 
 auto GPUBufferUploader::fail(std::string_view reason) const -> UniqueGPUBuffer
 {
-	report(fmt::format("[ERROR] GPUBufferUploader::create() failed: {}", reason));
+	report(fmt::format("GPUBufferUploader::create() failed: {}", reason));
 	return {};
 }
 
@@ -33,7 +33,7 @@ auto GPUBufferUploader::create() const -> UniqueGPUBuffer
 	SDL_GPUBufferCreateInfo buffer_info{};
 	buffer_info.usage = m_usage;
 	buffer_info.size = size;
-	UniqueGPUBuffer buffer{SDL_CreateGPUBuffer(m_device, &buffer_info), {m_device}};
+	UniqueGPUBuffer buffer = make_gpu_buffer(m_device, buffer_info);
 	if (!buffer) return fail_sdl("SDL_CreateGPUBuffer");
 
 	void* mapped{SDL_MapGPUTransferBuffer(m_device, m_transfer_buffer, true)};

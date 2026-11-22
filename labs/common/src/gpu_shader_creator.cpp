@@ -11,7 +11,7 @@ auto GPUShaderCreator::report(std::string_view message) const -> void
 
 auto GPUShaderCreator::fail(std::string_view reason) const -> UniqueGPUShader
 {
-	report(fmt::format("[ERROR] GPUShaderCreator::create() failed: {}", reason));
+	report(fmt::format("GPUShaderCreator::create() failed: {}", reason));
 	return {};
 }
 
@@ -96,7 +96,7 @@ auto GPUShaderCreator::create() const -> UniqueGPUShader
 	if (!m_stage) return fail("shader stage has not been set.");
 	if ((SDL_GetGPUShaderFormats(m_device) & m_shader_create_info.format) == 0) {
 		return fail(fmt::format(
-			"the device does not support the requested shader format "
+			"The device does not support the requested shader format "
 			"(file: \"{}\").",
 			m_path
 		));
@@ -111,13 +111,13 @@ auto GPUShaderCreator::create() const -> UniqueGPUShader
 		return fail(fmt::format("Shader file \"{}\" is empty.", m_path));
 	}
 
-	SDL_GPUShaderCreateInfo info{m_shader_create_info};
-	info.code = static_cast<const Uint8*>(code.get());
-	info.code_size = code_size;
-	info.entrypoint = m_entrypoint.c_str();
-	info.stage = *m_stage;
+	SDL_GPUShaderCreateInfo shader_create_info{m_shader_create_info};
+	shader_create_info.code = static_cast<const Uint8*>(code.get());
+	shader_create_info.code_size = code_size;
+	shader_create_info.entrypoint = m_entrypoint.c_str();
+	shader_create_info.stage = m_stage.value();
 
-	UniqueGPUShader shader{SDL_CreateGPUShader(m_device, &info), {m_device}};
+	UniqueGPUShader shader = make_gpu_shader(m_device, shader_create_info);
 	if (!shader) {
 		return fail(
 			fmt::format("SDL_CreateGPUShader() failed for \"{}\": {}", m_path, SDL_GetError())

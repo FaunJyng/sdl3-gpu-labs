@@ -66,20 +66,17 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 	SDL_SetAppMetadata("Push Constant Color", "1.0", "com.faunjyng.sdl3labs");
 
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[ERROR] SDL_Init() failed: %s", SDL_GetError());
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init() failed: %s", SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
 	auto* state{new AppState{}};
 	*appstate = state;
 
+	// Window + Device
 	UniqueSDLWindow window{SDL_CreateWindow("Push Constant Color", 800, 600, 0)};
 	if (!window) {
-		SDL_LogError(
-			SDL_LOG_CATEGORY_APPLICATION,
-			"[ERROR] SDL_CreateWindow() failed: %s",
-			SDL_GetError()
-		);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateWindow() failed: %s", SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
@@ -87,7 +84,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 	if (!device) {
 		SDL_LogError(
 			SDL_LOG_CATEGORY_APPLICATION,
-			"[ERROR] SDL_CreateGPUDevice() failed: %s",
+			"SDL_CreateGPUDevice() failed: %s",
 			SDL_GetError()
 		);
 		return SDL_APP_FAILURE;
@@ -96,10 +93,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 	state->window = std::move(window);
 	state->device = std::move(device);
 
+	// Claim window
 	if (!SDL_ClaimWindowForGPUDevice(state->device.get(), state->window.get())) {
 		SDL_LogError(
 			SDL_LOG_CATEGORY_APPLICATION,
-			"[ERROR] SDL_ClaimWindowForGPUDevice() failed: %s",
+			"SDL_ClaimWindowForGPUDevice() failed: %s",
 			SDL_GetError()
 		);
 		return SDL_APP_FAILURE;
@@ -177,13 +175,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 	state->pipeline = std::move(pipeline);
 
 	// Vertex Buffer
-	SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{};
-	transfer_buffer_create_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-	transfer_buffer_create_info.size = sizeof(VERTICES);
-	UniqueGPUTransferBuffer transfer_buffer{
-		SDL_CreateGPUTransferBuffer(state->device.get(), &transfer_buffer_create_info),
-		{state->device.get()}
-	};
+	UniqueGPUTransferBuffer transfer_buffer{make_gpu_transfer_buffer(
+		state->device.get(),
+		{.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, .size = sizeof(VERTICES)}
+	)};
 
 	GPUBufferUploader buffer_uploader{};
 	UniqueGPUBuffer vertex_buffer{
@@ -235,17 +230,20 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 	}
 
 	if (swapchain_texture) {
-		SDL_GPUColorTargetInfo target{};
-		target.texture = swapchain_texture;
-		target.clear_color = {1.0f, 1.0f, 1.0f, 1.0f};
-		target.load_op = SDL_GPU_LOADOP_CLEAR;
-		target.store_op = SDL_GPU_STOREOP_STORE;
+		SDL_GPUColorTargetInfo color_target_info{
+			.texture = swapchain_texture,
+			.clear_color = {1.0f, 1.0f, 1.0f, 1.0f},
+			.load_op = SDL_GPU_LOADOP_CLEAR,
+			.store_op = SDL_GPU_STOREOP_STORE
+		};
 
-		SDL_GPURenderPass* render_pass{SDL_BeginGPURenderPass(command_buffer, &target, 1, nullptr)};
+		SDL_GPURenderPass* render_pass{
+			SDL_BeginGPURenderPass(command_buffer, &color_target_info, 1, nullptr)
+		};
 		if (!render_pass) {
 			SDL_LogError(
 				SDL_LOG_CATEGORY_APPLICATION,
-				"[ERROR] SDL_BeginGPURenderPass() failed: %s",
+				"SDL_BeginGPURenderPass() failed: %s",
 				SDL_GetError()
 			);
 			SDL_CancelGPUCommandBuffer(command_buffer);
@@ -268,7 +266,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 	if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
 		SDL_LogError(
 			SDL_LOG_CATEGORY_APPLICATION,
-			"[ERROR] SDL_SubmitGPUCommandBuffer() failed: %s",
+			"SDL_SubmitGPUCommandBuffer() failed: %s",
 			SDL_GetError()
 		);
 		return SDL_APP_FAILURE;
