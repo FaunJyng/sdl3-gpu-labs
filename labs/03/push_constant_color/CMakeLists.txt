@@ -1,12 +1,10 @@
 add_executable(push_constant_color push_constant_color.cpp)
 
-target_link_libraries(push_constant_color PRIVATE SDL3::SDL3 fmt::fmt common)
+target_link_libraries(push_constant_color PRIVATE SDL3::SDL3 common)
 
 target_include_directories(push_constant_color PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-
-target_copy_dlls(push_constant_color)
 
 add_custom_command(
 	TARGET push_constant_color
