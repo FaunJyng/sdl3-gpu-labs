@@ -107,7 +107,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
 	// Shaders
 	auto vertex_shader_path{Path::absolute_path_relative_to_exe(
-		"02",
+		"03",
 		"push_constant_color",
 		"shaders",
 		"triangle.vert.spv"
@@ -115,7 +115,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 	if (!vertex_shader_path) return SDL_APP_FAILURE;
 
 	auto fragment_shader_path{Path::absolute_path_relative_to_exe(
-		"02",
+		"03",
 		"push_constant_color",
 		"shaders",
 		"triangle.frag.spv"

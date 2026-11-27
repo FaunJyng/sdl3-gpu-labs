@@ -11,5 +11,5 @@ add_custom_command(
 	POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 		"${CMAKE_CURRENT_SOURCE_DIR}/shaders/build"
-        "$<TARGET_FILE_DIR:push_constant_position>/02/push_constant_position/shaders"
+        "$<TARGET_FILE_DIR:push_constant_position>/03/push_constant_position/shaders"
 )

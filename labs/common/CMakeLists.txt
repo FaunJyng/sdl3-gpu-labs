@@ -1,5 +1,6 @@
 add_library(common STATIC
 	src/path.cpp
+	src/timer.cpp
     src/gpu_shader_creator.cpp
 	src/gpu_buffer_uploader.cpp
 	src/gpu_graphics_pipeline_creator.cpp

@@ -11,5 +11,5 @@ add_custom_command(
 	POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 		"${CMAKE_CURRENT_SOURCE_DIR}/shaders/build"
-        "$<TARGET_FILE_DIR:push_constant_color>/02/push_constant_color/shaders"
+        "$<TARGET_FILE_DIR:push_constant_color>/03/push_constant_color/shaders"
 )
